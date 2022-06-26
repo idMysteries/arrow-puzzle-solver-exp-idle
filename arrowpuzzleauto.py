@@ -22,9 +22,9 @@ y0=396  #Y of Topmost cell in the leftmost column
 dx=37   #dX of 2 horizonal cells
 dy=44   #dY of 2 vertical cells
 scrcpy_path="scrcpy"    #Replace with your path to scrcpy
-adb_path="adb"          #Replace with your path to adb
 
 colors=[]
+
 class KeyDown(PyKeyboardEvent):
     def __init__(self):
         PyKeyboardEvent.__init__(self)
@@ -53,11 +53,13 @@ def rgb2num(rgb):
     else:
         num=0
     return num
+
 def packcoords(x,y):
     global x0,y0,dx,dy
     outx=x0+x*dx
     outy=y0-x*0.5*dy+y*dy
     return outx,outy
+
 def clickNum(x,y,num):
     x=int(x+root.winfo_x()+root.winfo_width())
     y=int(y+root.winfo_y())
@@ -65,15 +67,15 @@ def clickNum(x,y,num):
     for i in range(0,num):
         mouse.click(x,y)
         time.sleep(0.05)
-def connect():
-    global ip
-    os.system(f"{adb_path} connect {ip.get()}")
+
 def scrcpy():
     global size,bitrate
     os.system(f"{scrcpy_path} --stay-awake -m {windowHeight} -b 1M")
+
 def run():
     global size,bitrate
     threading.Thread(target=scrcpy,daemon=True).start()
+    
 def grab(wx,wy,width,height):
     global screen
     screen = ImageGrab.grab((wx,wy,wx+width,wy+height))
@@ -86,6 +88,7 @@ def grab(wx,wy,width,height):
                 color=rgb2num(screen.getpixel(packcoords(x,y)))
                 colors[y][x]=color
     return colors
+
 def simulateClick(x,y,clicks,colors):
     global mode
     xys=[[-1,-1],[0,-1],[-1,0],[0,0],[1,0],[0,1],[1,1]]
@@ -101,6 +104,7 @@ def simulateClick(x,y,clicks,colors):
                 else:
                     while colors[y2][x2]>6:
                         colors[y2][x2]=colors[y2][x2]-6
+                        
 numDictHard={
     "1121":[0,1,0,0],
     "1212":[0,1,1,0],
@@ -110,6 +114,7 @@ numDictHard={
     "2211":[0,0,1,1],
     "2221":[1,0,1,0]
 }
+
 numDictExpert={
     "1141":[0,3,0,0],
     "1216":[0,1,1,2],
@@ -252,6 +257,7 @@ def automate():
         while ((not kill) and autoclick(colors)<1):
             pass
         time.sleep(0.1)
+
 root=tkinter.Tk()
 root.geometry("200x200+100+100")
 root.title("ArrowPuzzleAuto")
@@ -260,30 +266,28 @@ try:    #windows
     ScaleFactor=ctypes.windll.shcore.GetScaleFactorForDevice(0)
 except:
     ScaleFactor=75
+
 style=ttk.Style()
+
 try:
     style.theme_use("vista")
 except:
     style.theme_use("default")
-ip=StringVar()
+
 mode=IntVar()
 mode.set(1)
-ipLabel=ttk.Label(root,text="ip")
-ipLabel.place(relx=0,rely=0,relheight=0.2,relwidth=1)
-ttk.Entry(ipLabel,textvariable=ip).place(relx=0.3,rely=0,relheight=1,relwidth=0.7)
-connectButton=ttk.Button(root,text="Connect",command=connect)
-connectButton.place(relx=0,rely=0.2,relheight=0.2,relwidth=0.5)
+
 ttk.Label(root,text="F10 to stop").place(relx=0,rely=0.4,relheight=0.2,relwidth=0.5)
 
-ttk.Button(root,text="Run",command=run).place(relx=0.5,rely=0.2,relheight=0.2,relwidth=0.5)
+ttk.Button(root,text="Run scrcpy",command=run).place(relx=0,rely=0,relheight=0.2,relwidth=1)
 ttk.Button(root,text="Automate",command=automate).place(relx=0,rely=0.8,relheight=0.2,relwidth=1)
 ttk.Button(root,text="Screenshot",command=screenshot).place(relx=0.5,rely=0.4,relheight=0.2,relwidth=0.5)
 ttk.Radiobutton(root,text="Hard",variable=mode,value=0).place(relx=0,rely=0.6,relheight=0.2,relwidth=0.5)
 ttk.Radiobutton(root,text="Expert",variable=mode,value=1).place(relx=0.5,rely=0.6,relheight=0.2,relwidth=0.5)
 
-
 def killThread():
     KeyDown().run()
+    
 threading.Thread(target=killThread,daemon=True).start()
 
 root.mainloop()
