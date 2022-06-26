@@ -15,12 +15,12 @@ import copy
 #Make sure your latency is low or this script can make lots of mistakes before solving
 #Change these values if the script doesn't work.
 #Take a screenshot with the button and get the x0,y0,dx,dy values from the picture.
-windowWidth=540
-windowHeight=950
-x0=50   #X of Topmost cell in the leftmost column
-y0=435  #Y of Topmost cell in the leftmost column
-dx=67   #dX of 2 horizonal cells
-dy=78   #dY of 2 vertical cells
+windowWidth=408
+windowHeight=720
+x0=90   #X of Topmost cell in the leftmost column
+y0=396  #Y of Topmost cell in the leftmost column
+dx=37   #dX of 2 horizonal cells
+dy=44   #dY of 2 vertical cells
 scrcpy_path="scrcpy"    #Replace with your path to scrcpy
 adb_path="adb"          #Replace with your path to adb
 
@@ -31,7 +31,7 @@ class KeyDown(PyKeyboardEvent):
     def tap(self, keycode, character, press):
         global kill
         if press:
-            if keycode==76:
+            if keycode==121:
                 kill=1
 
 def rgb2num(rgb):
@@ -64,13 +64,13 @@ def clickNum(x,y,num):
     mouse=PyMouse()
     for i in range(0,num):
         mouse.click(x,y)
-        time.sleep(0.01)
+        time.sleep(0.05)
 def connect():
     global ip
     os.system(f"{adb_path} connect {ip.get()}")
 def scrcpy():
     global size,bitrate
-    os.system(f"{scrcpy_path} --stay-awake --crop 1080:1900:0:0 -m {windowHeight} --codec-options bitrate=2000000")
+    os.system(f"{scrcpy_path} --stay-awake -m {windowHeight} -b 1M")
 def run():
     global size,bitrate
     threading.Thread(target=scrcpy,daemon=True).start()
@@ -78,7 +78,6 @@ def grab(wx,wy,width,height):
     global screen
     screen = ImageGrab.grab((wx,wy,wx+width,wy+height))
     colors=[]
-    print("")
     for y in range(0,7):
         colors.append([])
         for x in range (0,7):
@@ -86,8 +85,6 @@ def grab(wx,wy,width,height):
             if abs(x-y)<=3:#ensure borders
                 color=rgb2num(screen.getpixel(packcoords(x,y)))
                 colors[y][x]=color
-            print(colors[y][x],end="")
-        print("")
     return colors
 def simulateClick(x,y,clicks,colors):
     global mode
@@ -200,10 +197,12 @@ def clickOrSimulate(colors,click=0):
                     if mode.get()==1:
                         if click==1:
                             clickNum(cx+5,cy+5,7-color)
+                            time.sleep(0.1)
                         colors=simulateClick(x,y+1,7-color,colors)
                     else:
                         if click==1:
                             clickNum(cx+5,cy+5,1)
+                            time.sleep(0.1)
                         colors=simulateClick(x,y+1,1,colors)
                     return 1
 def autoclick(colors):
@@ -225,6 +224,7 @@ def autoclick(colors):
     for x in range(0,4):
         cx,cy=packcoords(x,0)
         clickNum(cx+5,cy+5,clickTop[x])
+        time.sleep(0.1)
         simulateClick(x,0,clickTop[x],colors)
     while (not kill and clickOrSimulate(colors,1)==1):
         pass
@@ -246,7 +246,7 @@ def automate():
         global windowWidth,windowHeight
         colors=grab(root.winfo_x()+root.winfo_width(),root.winfo_y(),windowWidth,windowHeight)
         if colors==finalcolors:
-            clickNum(250,900,1)
+            clickNum(250,690,1)
             time.sleep(0.5)
             colors=grab(root.winfo_x()+root.winfo_width(),root.winfo_y(),windowWidth,windowHeight)
         while ((not kill) and autoclick(colors)<1):
