@@ -1,111 +1,127 @@
-#! /bin/python3
+#!/usr/bin/env python3
 import threading
-from PIL import ImageGrab
-from PIL import Image
 import time
-from pykeyboard import PyKeyboardEvent
-import tkinter
-from tkinter import ttk
-from tkinter import IntVar
-from tkinter import StringVar
 import os
 import ctypes
+from copy import deepcopy
+from PIL import ImageGrab
+from pykeyboard import PyKeyboardEvent
 from pymouse import PyMouse
-import copy
-#Make sure your latency is low or this script can make lots of mistakes before solving
-#Change these values if the script doesn't work.
-#Take a screenshot with the button and get the x0,y0,dx,dy values from the picture.
-windowWidth=408
-windowHeight=720
-x0=90   #X of Topmost cell in the leftmost column
-y0=396  #Y of Topmost cell in the leftmost column
-dx=37   #dX of 2 horizonal cells
-dy=44   #dY of 2 vertical cells
-scrcpy_path="scrcpy"    #Replace with your path to scrcpy
+import tkinter as tk
+from tkinter import ttk
+from tkinter import IntVar
 
-colors=[]
+# Параметры окна игры (измените при необходимости)
+WINDOW_WIDTH = 408
+WINDOW_HEIGHT = 720
+X0 = 90   # X верхней ячейки в левом столбце
+Y0 = 396  # Y верхней ячейки в левом столбце
+DX = 37   # Дельта X между двумя горизонтальными ячейками
+DY = 44   # Дельта Y между двумя вертикальными ячейками
+SCRCPY_PATH = "scrcpy"    # Путь к scrcpy
+
+# Инициализация PyMouse
+mouse = PyMouse()
+
+# Флаг для остановки автоматизации
+kill = False
 
 class KeyDown(PyKeyboardEvent):
     def __init__(self):
-        PyKeyboardEvent.__init__(self)
+        super().__init__()
+
     def tap(self, keycode, character, press):
         global kill
-        if press:
-            if keycode==121:
-                kill=1
+        if press and keycode == 121:  # Код клавиши F10
+            kill = True
 
-def rgb2num(rgb):
-    global mode
-    if rgb[0]<=20:
-        num=1
-    elif mode.get()==0 and rgb[0]>=60:
-        num=2
-    elif rgb[0]<=35:
-        num=2
-    elif rgb[0]<=45:
-        num=3
-    elif rgb[0]<=60:
-        num=4
-    elif rgb[0]<=75:
-        num=5
-    elif rgb[0]<=90:
-        num=6
-    else:
-        num=0
-    return num
+def rgb_to_num(rgb, mode_value):
+    red = rgb[0]
+    if red <= 20:
+        return 1
+    if mode_value == 0:  # Режим Hard
+        if red >= 60:
+            return 2
+        elif red <= 35:
+            return 2
+        elif red <= 45:
+            return 3
+        elif red <= 60:
+            return 4
+        else:
+            return 0
+    else:  # Режим Expert
+        if red <= 35:
+            return 2
+        elif red <= 45:
+            return 3
+        elif red <= 60:
+            return 4
+        elif red <= 75:
+            return 5
+        elif red <= 90:
+            return 6
+        else:
+            return 0
 
-def packcoords(x,y):
-    global x0,y0,dx,dy
-    outx=x0+x*dx
-    outy=y0-x*0.5*dy+y*dy
-    return outx,outy
+def pack_coords(x, y, x0, y0, dx, dy):
+    outx = x0 + x * dx
+    outy = y0 - x * 0.5 * dy + y * dy
+    return int(outx), int(outy)
 
-def clickNum(x,y,num):
-    x=int(x+root.winfo_x()+root.winfo_width())
-    y=int(y+root.winfo_y())
-    mouse=PyMouse()
-    for i in range(0,num):
-        mouse.click(x,y)
+def click_num(x, y, num_clicks, root):
+    adjusted_x = int(x + root.winfo_x() + root.winfo_width())
+    adjusted_y = int(y + root.winfo_y())
+    for _ in range(num_clicks):
+        mouse.click(adjusted_x, adjusted_y)
         time.sleep(0.05)
 
-def scrcpy():
-    global size,bitrate
-    os.system(f"{scrcpy_path} --stay-awake -m {windowHeight} -b 1M")
+def run_scrcpy():
+    os.system(f"{SCRCPY_PATH} --stay-awake -m {WINDOW_HEIGHT} -b 1M")
 
-def run():
-    global size,bitrate
-    threading.Thread(target=scrcpy,daemon=True).start()
-    
-def grab(wx,wy,width,height):
-    global screen
-    screen = ImageGrab.grab((wx,wy,wx+width,wy+height))
-    colors=[]
-    for y in range(0,7):
-        colors.append([])
-        for x in range (0,7):
-            colors[y].append(0)
-            if abs(x-y)<=3:#ensure borders
-                color=rgb2num(screen.getpixel(packcoords(x,y)))
-                colors[y][x]=color
+def grab_screen(window_x, window_y, width, height, mode_value, x0, y0, dx, dy):
+    screen = ImageGrab.grab((window_x, window_y, window_x + width, window_y + height))
+    colors = []
+    for y in range(7):
+        row = []
+        for x in range(7):
+            if abs(x - y) <= 3:
+                coords = pack_coords(x, y, x0, y0, dx, dy)
+                rgb = screen.getpixel(coords)
+                color_num = rgb_to_num(rgb, mode_value)
+                row.append(color_num)
+            else:
+                row.append(0)
+        colors.append(row)
     return colors
 
-def simulateClick(x,y,clicks,colors):
-    global mode
-    xys=[[-1,-1],[0,-1],[-1,0],[0,0],[1,0],[0,1],[1,1]]
-    for xy in xys:
-        x2=x+xy[0]
-        y2=y+xy[1]
-        if x2>=0 and x2<=6 and y2>=0 and y2<=6:
-            if colors[y2][x2]>=1:
-                colors[y2][x2]=colors[y2][x2]+clicks
-                if mode.get()==0:
-                    while colors[y2][x2]>2:
-                        colors[y2][x2]=colors[y2][x2]-2
-                else:
-                    while colors[y2][x2]>6:
-                        colors[y2][x2]=colors[y2][x2]-6
-                        
-numDictHard={
+XYS_OFFSETS = [(-1, -1), (0, -1), (-1, 0), (0, 0), (1, 0), (0, 1), (1, 1)]
+
+def simulate_click(x, y, clicks, colors, mode_value):
+    for dx, dy in XYS_OFFSETS:
+        x2 = x + dx
+        y2 = y + dy
+        if 0 <= x2 <= 6 and 0 <= y2 <= 6 and colors[y2][x2] >= 1:
+            colors[y2][x2] += clicks
+            limit = 2 if mode_value == 0 else 6
+            while colors[y2][x2] > limit:
+                colors[y2][x2] -= limit
+
+def click_or_simulate(colors, click_flag, root, x0, y0, dx, dy, mode_value):
+    for y in range(7):
+        for x in reversed(range(7)):
+            color = colors[y][x]
+            if abs(x - y) <= 3 and color > 1 and abs(x - y - 1) <= 3 and y < 6:
+                cx, cy = pack_coords(x, y + 1, x0, y0, dx, dy)
+                num_clicks = (7 - color) if mode_value == 1 else 1
+                if click_flag:
+                    click_num(cx + 5, cy + 5, num_clicks, root)
+                    time.sleep(0.1)
+                simulate_click(x, y + 1, num_clicks, colors, mode_value)
+                return True
+    return False
+
+NUM_DICT_HARD = {
     "1121":[0,1,0,0],
     "1212":[0,1,1,0],
     "1222":[0,0,1,0],
@@ -115,7 +131,7 @@ numDictHard={
     "2221":[1,0,1,0]
 }
 
-numDictExpert={
+NUM_DICT_EXPERT = {
     "1141":[0,3,0,0],
     "1216":[0,1,1,2],
     "1246":[2,0,1,4],
@@ -189,105 +205,101 @@ numDictExpert={
     "6643":[1,0,1,0]
 }
 
-def screenshot():
-    grab(root.winfo_x()+root.winfo_width(),root.winfo_y(),windowWidth,windowHeight)
-    screen.save("arrowpuzzle.png")
-def clickOrSimulate(colors,click=0):
-    for y in range(0,7):
-        for x in range (6,-1,-1):
-            color=colors[y][x]
-            if abs(x-y)<=3:
-                if color>1 and abs(x-y-1)<=3 and y<6:
-                    cx,cy=packcoords(x,y+1)
-                    if mode.get()==1:
-                        if click==1:
-                            clickNum(cx+5,cy+5,7-color)
-                            time.sleep(0.1)
-                        colors=simulateClick(x,y+1,7-color,colors)
-                    else:
-                        if click==1:
-                            clickNum(cx+5,cy+5,1)
-                            time.sleep(0.1)
-                        colors=simulateClick(x,y+1,1,colors)
-                    return 1
-def autoclick(colors):
-    global mode,kill
-    colorstmp=copy.deepcopy(colors)
-    while (not kill and clickOrSimulate(colorstmp,0))==1:
+def auto_click(colors, root, x0, y0, dx, dy, mode_value):
+    global kill
+    colors_tmp = deepcopy(colors)
+    while not kill and click_or_simulate(colors_tmp, False, root, x0, y0, dx, dy, mode_value):
         pass
-    bottom=colorstmp[6][3:7]
-    bottom.reverse()
-    bottomnum=""
-    for i in bottom:
-        bottomnum=bottomnum+str(i)
-    if bottomnum=="1111":
-        clickTop=[0,0,0,0]
-    elif mode.get()==1:
-        clickTop=numDictExpert[bottomnum]
+    bottom_row = colors_tmp[6][3:7][::-1]
+    bottom_num = ''.join(str(num) for num in bottom_row)
+    if bottom_num == "1111":
+        click_top = [0, 0, 0, 0]
     else:
-        clickTop=numDictHard[bottomnum]
-    for x in range(0,4):
-        cx,cy=packcoords(x,0)
-        clickNum(cx+5,cy+5,clickTop[x])
-        time.sleep(0.1)
-        simulateClick(x,0,clickTop[x],colors)
-    while (not kill and clickOrSimulate(colors,1)==1):
+        dict_choice = NUM_DICT_EXPERT if mode_value == 1 else NUM_DICT_HARD
+        click_top = dict_choice.get(bottom_num, [0, 0, 0, 0])
+    for x in range(4):
+        if click_top[x] > 0:
+            cx, cy = pack_coords(x, 0, x0, y0, dx, dy)
+            click_num(cx + 5, cy + 5, click_top[x], root)
+            time.sleep(0.1)
+            simulate_click(x, 0, click_top[x], colors, mode_value)
+    while not kill and click_or_simulate(colors, True, root, x0, y0, dx, dy, mode_value):
         pass
-    return 1
-        
-def automate():
-    global root,kill,colors
-    kill=0
-    clickNum(100,100,10)
-    finalcolors=[
+
+def automate(root, x0, y0, dx, dy, window_width, window_height, mode_value):
+    global kill
+    kill = False
+    click_num(100, 100, 10, root)  # Возможно, требуется для фокуса
+    final_colors = [
         [2,2,2,2,0,0,0],
         [2,2,2,2,2,0,0],
         [2,2,2,2,2,2,0],
         [2,2,2,2,2,2,2],
         [0,2,2,2,2,2,2],
         [0,0,2,2,2,2,2],
-        [0,0,0,2,2,2,2]]
-    while(not kill):
-        global windowWidth,windowHeight
-        colors=grab(root.winfo_x()+root.winfo_width(),root.winfo_y(),windowWidth,windowHeight)
-        if colors==finalcolors:
-            clickNum(250,690,1)
+        [0,0,0,2,2,2,2]
+    ]
+    while not kill:
+        colors = grab_screen(
+            root.winfo_x() + root.winfo_width(),
+            root.winfo_y(),
+            window_width,
+            window_height,
+            mode_value,
+            x0, y0, dx, dy
+        )
+        if colors == final_colors:
+            click_num(250, 690, 1, root)  # Нажатие кнопки для продолжения
             time.sleep(0.5)
-            colors=grab(root.winfo_x()+root.winfo_width(),root.winfo_y(),windowWidth,windowHeight)
-        while ((not kill) and autoclick(colors)<1):
-            pass
+            continue
+        auto_click(colors, root, x0, y0, dx, dy, mode_value)
         time.sleep(0.1)
 
-root=tkinter.Tk()
-root.geometry("200x200+100+100")
-root.title("ArrowPuzzleAuto")
-try:    #windows
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    ScaleFactor=ctypes.windll.shcore.GetScaleFactorForDevice(0)
-except:
-    ScaleFactor=75
+def take_screenshot(root, x0, y0, dx, dy, window_width, window_height, mode_value):
+    colors = grab_screen(
+        root.winfo_x() + root.winfo_width(),
+        root.winfo_y(),
+        window_width,
+        window_height,
+        mode_value,
+        x0, y0, dx, dy
+    )
+    screen = ImageGrab.grab((
+        root.winfo_x() + root.winfo_width(),
+        root.winfo_y(),
+        root.winfo_x() + root.winfo_width() + window_width,
+        root.winfo_y() + window_height
+    ))
+    screen.save("arrowpuzzle.png")
 
-style=ttk.Style()
+def main():
+    root = tk.Tk()
+    root.geometry("200x200+100+100")
+    root.title("ArrowPuzzleAuto")
 
-try:
-    style.theme_use("vista")
-except:
-    style.theme_use("default")
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except:
+        pass
 
-mode=IntVar()
-mode.set(1)
+    style = ttk.Style()
+    try:
+        style.theme_use("vista")
+    except:
+        style.theme_use("default")
 
-ttk.Label(root,text="F10 to stop").place(relx=0,rely=0.4,relheight=0.2,relwidth=0.5)
+    mode = IntVar(value=1)
 
-ttk.Button(root,text="Run scrcpy",command=run).place(relx=0,rely=0,relheight=0.2,relwidth=1)
-ttk.Button(root,text="Automate",command=automate).place(relx=0,rely=0.8,relheight=0.2,relwidth=1)
-ttk.Button(root,text="Screenshot",command=screenshot).place(relx=0.5,rely=0.4,relheight=0.2,relwidth=0.5)
-ttk.Radiobutton(root,text="Hard",variable=mode,value=0).place(relx=0,rely=0.6,relheight=0.2,relwidth=0.5)
-ttk.Radiobutton(root,text="Expert",variable=mode,value=1).place(relx=0.5,rely=0.6,relheight=0.2,relwidth=0.5)
+    ttk.Button(root, text="Run scrcpy", command=lambda: threading.Thread(target=run_scrcpy, daemon=True).start()).place(relx=0, rely=0, relheight=0.2, relwidth=1)
+    ttk.Button(root, text="Automate", command=lambda: threading.Thread(target=automate, args=(root, X0, Y0, DX, DY, WINDOW_WIDTH, WINDOW_HEIGHT, mode.get()), daemon=True).start()).place(relx=0, rely=0.8, relheight=0.2, relwidth=1)
+    ttk.Button(root, text="Screenshot", command=lambda: take_screenshot(root, X0, Y0, DX, DY, WINDOW_WIDTH, WINDOW_HEIGHT, mode.get())).place(relx=0.5, rely=0.4, relheight=0.2, relwidth=0.5)
+    ttk.Radiobutton(root, text="Hard", variable=mode, value=0).place(relx=0, rely=0.6, relheight=0.2, relwidth=0.5)
+    ttk.Radiobutton(root, text="Expert", variable=mode, value=1).place(relx=0.5, rely=0.6, relheight=0.2, relwidth=0.5)
+    ttk.Label(root, text="F10 to stop").place(relx=0, rely=0.4, relheight=0.2, relwidth=0.5)
 
-def killThread():
-    KeyDown().run()
-    
-threading.Thread(target=killThread,daemon=True).start()
+    threading.Thread(target=KeyDown().run, daemon=True).start()
 
-root.mainloop()
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
